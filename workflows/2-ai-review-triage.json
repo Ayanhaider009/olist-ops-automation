@@ -1,0 +1,336 @@
+{
+  "name": "AI Review Triage",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b548186c-f795-469b-9aba-143051ab11ea",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select review_id,\n       order_id,\n       review_score,\n       review_comment_title,\n       review_comment_message\nfrom reviews\nwhere review_score <= 2\n  and triaged_at is null\n  and review_comment_message is not null\norder by review_creation_date\nlimit 5;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "d4dd532f-ce47-4a8b-a7b9-eca7a6ad87ee",
+      "name": "Find Bad Reviews",
+      "credentials": {
+        "postgres": {
+          "id": "qntCfDedbpy8Bz1p",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "=Title: {{ $json.review_comment_title }}\nReview: {{ $json.review_comment_message }}\nStars: {{ $json.review_score }}",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "translation",
+              "description": "English translation of the customer review",
+              "required": true
+            },
+            {
+              "name": "category",
+              "description": "Exactly one of: late_delivery, damaged_product, wrong_item, missing_item, poor_quality, seller_issue, other",
+              "required": true
+            },
+            {
+              "name": "reply_draft",
+              "description": "A short, polite reply in English to the customer. Maximum 3 sentences. Apologise for the specific problem, say what we will do next, and do not ask the customer for their order number or to contact support.",
+              "required": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "adfdb258-f71e-4392-b96c-8afb23df37fa",
+      "name": "Information Extractor",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        208
+      ],
+      "id": "1db09cbc-826f-4bb2-8087-7c336c71fff0",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ja6EldzVG0fZGkZt",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "reviews",
+          "mode": "list",
+          "cachedResultName": "reviews"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "review_id": "={{ $('Find Bad Reviews').item.json.review_id }}",
+            "ai_translation": "={{ $json.output.translation }}",
+            "ai_category": "={{ $json.output.category }}",
+            "ai_reply_draft": "={{ $json.output.reply_draft }}",
+            "triaged_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [
+            "review_id"
+          ],
+          "schema": [
+            {
+              "id": "review_id",
+              "displayName": "review_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "order_id",
+              "displayName": "order_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "review_score",
+              "displayName": "review_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "review_comment_title",
+              "displayName": "review_comment_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "review_comment_message",
+              "displayName": "review_comment_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "review_creation_date",
+              "displayName": "review_creation_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "review_answer_timestamp",
+              "displayName": "review_answer_timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ai_translation",
+              "displayName": "ai_translation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_category",
+              "displayName": "ai_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_reply_draft",
+              "displayName": "ai_reply_draft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "triaged_at",
+              "displayName": "triaged_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        816,
+        0
+      ],
+      "id": "315400a7-2ac2-4180-a705-770f52dbc3d5",
+      "name": "Save AI results",
+      "credentials": {
+        "postgres": {
+          "id": "qntCfDedbpy8Bz1p",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        16,
+        224
+      ],
+      "id": "29425b91-9fbb-4117-b9f1-df69ff5e4db6",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Find Bad Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Bad Reviews": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Save AI results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Find Bad Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "dd78f4be-27d4-4730-bbd4-52b0848244d7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f4b45afaec6bad035442423cb9921d3e3f35c41afcb68212a5c5583075189d0f"
+  },
+  "nodeGroups": [],
+  "id": "BlE8huqre2D4glsR",
+  "tags": []
+}

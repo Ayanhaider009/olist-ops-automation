@@ -1,0 +1,163 @@
+{
+  "name": "Late Delivery Monitor",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -176
+      ],
+      "id": "e330d40e-621c-46a7-889a-a53d5a9507ff",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update orders\nset late_flagged = true,\n    late_flagged_at = now()\nwhere order_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $json.order_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        448,
+        0
+      ],
+      "id": "3ed7042e-cc68-4cec-ae76-6692d21aff68",
+      "name": "Flag orders",
+      "credentials": {
+        "postgres": {
+          "id": "qntCfDedbpy8Bz1p",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select order_id,\n       order_estimated_delivery_date,\n       order_delivered_customer_date,\n       order_delivered_customer_date::date - order_estimated_delivery_date::date as days_late\nfrom orders\nwhere late_flagged = false\n  and order_delivered_customer_date::date > order_estimated_delivery_date::date\norder by order_purchase_timestamp\nlimit 20;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "5cba92fa-4a05-441e-a963-880c9b8edc07",
+      "name": "Find late orders",
+      "credentials": {
+        "postgres": {
+          "id": "qntCfDedbpy8Bz1p",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "ayanhaider0099@gmail.com",
+        "toEmail": "maverick009952@gmail.com",
+        "subject": "=   {{ $('Find late orders').all().length }} late deliveries flagged",
+        "html": "=   <h3>Late delivery alert</h3>\n   <table border=\"1\" cellpadding=\"6\">\n   <tr><th>Order</th><th>Days late</th></tr>\n   {{ $('Find late orders').all().map(i => `<tr><td>${i.json.order_id}</td><td>${i.json.days_late}</td></tr>`).join('') }}\n   </table>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "e4b227f6-12ef-4131-b7bb-ad8ea20177ba",
+      "name": "Send an Email",
+      "webhookId": "de8658c2-9d3b-4ca8-8f2e-720992344c4e",
+      "credentials": {
+        "smtp": {
+          "id": "mWjHDOv3M77uIu2s",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -32,
+        112
+      ],
+      "id": "33cb0677-d6bc-4db6-b863-60c63c82002f",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Find late orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find late orders": {
+      "main": [
+        [
+          {
+            "node": "Flag orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag orders": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Find late orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b7219f59-469f-453f-b0af-bc2a5a5d8121",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f4b45afaec6bad035442423cb9921d3e3f35c41afcb68212a5c5583075189d0f"
+  },
+  "nodeGroups": [],
+  "id": "lPF46RykPDj8ZKA3",
+  "tags": []
+}

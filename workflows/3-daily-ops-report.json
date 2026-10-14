@@ -1,0 +1,190 @@
+{
+  "name": "Daily Ops Report",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "441eaaf1-5736-4039-814b-944e563590b4",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select\n  (select count(*) from orders\n    where late_flagged_at > now() - interval '24 hours') as late_flagged_24h,\n  (select count(*) from orders where late_flagged) as late_flagged_total,\n  (select round(100.0 * count(*) filter (where order_delivered_customer_date::date > order_estimated_delivery_date::date)\n          / count(*) filter (where order_delivered_customer_date is not null), 1)\n     from orders) as late_rate_pct,\n  (select count(*) from reviews\n    where triaged_at > now() - interval '24 hours') as reviews_triaged_24h,\n  (select json_agg(t) from (\n     select ai_category, count(*) as n from reviews\n     where triaged_at is not null\n     group by ai_category order by n desc) t) as complaint_breakdown;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "33fc4d53-5dd3-4798-8152-25a3343048e5",
+      "name": "Get daily stats",
+      "credentials": {
+        "postgres": {
+          "id": "qntCfDedbpy8Bz1p",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        208
+      ],
+      "id": "50b79515-5d81-4bc1-b41a-641dd3728bd9",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ja6EldzVG0fZGkZt",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an operations analyst for an online store. Write a 3-sentence morning summary for the operations manager based on these numbers. Point out anything that needs attention. Plain text, no headings.\n\nLate orders flagged in the last 24h: {{ $json.late_flagged_24h }}\nTotal late orders flagged so far: {{ $json.late_flagged_total }}\nOverall late delivery rate: {{ $json.late_rate_pct }}%\nReviews triaged in the last 24h: {{ $json.reviews_triaged_24h }}\nAll-time complaint breakdown (not just last 24h): {{ JSON.stringify($json.complaint_breakdown) }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        0
+      ],
+      "id": "fb589215-a1ad-4110-9ac1-ebc68bc27d90",
+      "name": "Write AI summary"
+    },
+    {
+      "parameters": {
+        "fromEmail": "ayanhaider0099@gmail.com",
+        "toEmail": "maverick009952@gmail.com",
+        "subject": "=Daily Ops Report: {{ $now.toFormat('dd LLL yyyy') }}",
+        "emailFormat": "=html",
+        "html": "=<h2>Daily Ops Report</h2>\n<p>{{ $json.text }}</p>\n<table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse\">\n<tr><td>Late orders flagged (24h)</td><td><b>{{ $('Get daily stats').item.json.late_flagged_24h }}</b></td></tr>\n<tr><td>Late orders flagged (total)</td><td>{{ $('Get daily stats').item.json.late_flagged_total }}</td></tr>\n<tr><td>Overall late delivery rate</td><td>{{ $('Get daily stats').item.json.late_rate_pct }}%</td></tr>\n<tr><td>Reviews triaged (24h)</td><td>{{ $('Get daily stats').item.json.reviews_triaged_24h }}</td></tr>\n</table>\n<h3>Complaints by type</h3>\n<ul>\n{{ $('Get daily stats').item.json.complaint_breakdown.map(c => `<li>${c.ai_category}: ${c.n}</li>`).join('') }}\n</ul>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        816,
+        0
+      ],
+      "id": "a5f602af-cb71-41ba-842b-1c789a75e321",
+      "name": "Send an Email",
+      "webhookId": "4e8f6997-cb37-4c1b-8470-0ecbebd990bd",
+      "credentials": {
+        "smtp": {
+          "id": "mWjHDOv3M77uIu2s",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        32,
+        224
+      ],
+      "id": "a3722052-7b44-483f-b354-04f59ddd88f3",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get daily stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get daily stats": {
+      "main": [
+        [
+          {
+            "node": "Write AI summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write AI summary",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write AI summary": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get daily stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Karachi",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "0939299d-b51a-4889-a8d4-16cb7e7491f6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f4b45afaec6bad035442423cb9921d3e3f35c41afcb68212a5c5583075189d0f"
+  },
+  "nodeGroups": [],
+  "id": "mFAbU7LRbhjopBDz",
+  "tags": []
+}
